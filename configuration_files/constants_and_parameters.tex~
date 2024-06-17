@@ -1,0 +1,22 @@
+#Parameters:
+Parameter: 18.8 #Temperature in Kelvin, set by Dr. Zelko and used to isolate tau parameter
+Parameter: 1.2 #Unitless beta value, set by Dr. Zelko and used to isolate tau parameter
+Parameter: 5.2395E-5 #Mean isolated tau value for stokes_i across both frequencies at constant T=18.8k and beta=1.2
+Parameter: 1 #Psi value, to be refined
+Parameter: 1 #Alpha value, to be refined
+Parameter: 1 #p_frac value, to be refined
+
+#Delete past this
+Parameter: 3 #k, delete this
+
+#Constants, all retrieved from Dr. Zelko's 'constant_ ^configuration.cfg' file
+
+Constant: 299792458 #Speed of light in m/s
+Constant: 6.62607015E-34 #Plancks constant in J * s
+Constant: 1.380649E-23 #Boltzmann's constant in J / K
+Constant: 2.72548 #Temperature of cosmic microwave background in Kelvin
+Constant: 353.E-9 #\nu_0 value as defined in Zelko et al. 2022
+Constant: 3 #k value used in Solaeche et al. 2018
+
+#Reference frequency is not retrieved from 'constant_^configuration.cfg' file
+Constant: 353e9 #Reference frequency used for temperature map in Hz
