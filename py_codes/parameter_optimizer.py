@@ -53,6 +53,16 @@ def execute_Chi2_optimization(constants, stokes_arrays_correct_units, bounds, pa
     Input: Tuple of constants, stokes_arrays_correct units, bounds, parameters
     Output: Array of shape (n,13), where n is the number of pixels that have been optimized. This array contains modelled emission based off of the optimized parameters in both frequencies, the optimized parameters corresponding to each pixel, and the optimized Chi^2 value for each pixel.
     """
+    
+    arrays_to_optimize = []
+    for file_number in range(np.shape(stokes_arrays_correct_units)[0]):
+        for parameter in range(np.shape(stokes_arrays_correct_units)[1]):
+            if stokes_arrays_correct_units[file_number, parameter, 0] is not np.nan:
+                arrays_to_optimize.append([file_number, parameter])
+
+    print(arrays_to_optimize)
+   
+   
     length_of_sample = int(100)
     starting_index = int(1.5e3)
     ending_index = int(starting_index + length_of_sample)
@@ -65,12 +75,12 @@ def execute_Chi2_optimization(constants, stokes_arrays_correct_units, bounds, pa
     j = 0
     for i in range(starting_index, ending_index): #Range of i is the range of indices of the real data that we will optimize parameters for
 
-        optimized_params = minimize(Chi2, parameters, args=(frequencies, constants, stokes_arrays_correct_units, i), method='BFGS')#, bounds=bounds)
+        optimized_params = minimize(Chi2, parameters, args=(frequencies, constants, stokes_arrays_correct_units, arrays_to_optimize, i), method='BFGS')#, bounds=bounds)
         minimized_Chi_2 = optimized_params.fun
 
         for method in optimize_methods:
             try:
-                alternate_optimization = minimize(Chi2, parameters, args=(frequencies, constants, stokes_arrays_correct_units, i), method='Nelder-Mead')#, bounds=bounds)
+                alternate_optimization = minimize(Chi2, parameters, args=(frequencies, constants, stokes_arrays_correct_units, arrays_to_optimize, i), method=optimize_methods[method])#, bounds=bounds)
                 if alternate_optimization.fun < minimized_Chi_2:
                     minimized_Chi_2 = alternate_optimization.fun
                     optimized_params = alternate_optimization
