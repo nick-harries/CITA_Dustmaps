@@ -116,7 +116,6 @@ def stokes_arrays_in_MJy_sr(files, constants, frequencies):
     Output: Array of shape (2, 6, 50331648*) containing stokes parameters and associated covariances at two different frequencies, all converted from units of Kcmb to MJy/sr
     """
 
-    file_217, file_353 = files
 
     """ 
     The layout of the data array is:
@@ -128,32 +127,31 @@ def stokes_arrays_in_MJy_sr(files, constants, frequencies):
     0,5: uu_cov_data_kcmb_217; 1,5: uu_cov_data_kcmb_353
     """
 
-    extracted_data_array = np.array([
-    extract_info(file_217)[:6],  # Take the first 6 elements of the output, ignore frequency and nest type
-    extract_info(file_353)[:6]   # Take the first 6 elements of the output, ignore frequency and nest type
-])
+    extracted_data_array = np.zeros((len(files), 6, len(extract_info(files[0])[0])))
+    for i in range(len(extracted_data_array[:, 0, 0])):
+        extracted_data_array[i, :, :] = extract_info(files[i])[:6]
 
-    conversion_factor_217, conversion_factor_353 = conversion_factors_Kcmb_to_MJy_sr(constants, frequencies)
+    #conversion_factor_217, conversion_factor_353 = conversion_factors_Kcmb_to_MJy_sr(constants, frequencies)
+    conversion_factors = conversion_factors_Kcmb_to_MJy_sr(constants, frequencies)
 
-    for i in range(3): #Stokes parameters are converted from Kcmb to MJy/sr
-        extracted_data_array[0, i, :] = extracted_data_array[0, i, :] * conversion_factor_217
-        extracted_data_array[1, i, :] = extracted_data_array[1, i, :] * conversion_factor_353
-    for j in range(3,6): #Covariances are converted from Kcmb^2 to (MJy/sr)^2
-        extracted_data_array[0, j, :] = extracted_data_array[0, j, :] * conversion_factor_217 ** 2
-        extracted_data_array[1, j, :] = extracted_data_array[1, j, :] * conversion_factor_353 ** 2
+    for freq in range(len(extracted_data_array[:, 0, 0])):
+        for parameter in range(0,3):
+            #Multiply stokes I, Q, U by their frequency dependent conversion factor
+            extracted_data_array[freq, parameter, :] * conversion_factors[freq]
+        for parameter in range(3, 6):
+            #Multiply I, Q, U covariances by their frequency dependent conversion factor squared
+            extracted_data_array[freq, parameter, :] * conversion_factors[freq] ** 2
 
-
-    """ 
-    The code past this comment decreases the resolution of the data from 2048 to 512 to decrease computing time. Delete past this comment and return the extracted_data_array if you want to keep the full resolution.
-    """
     return extracted_data_array
 
 def decrease_resolution(extracted_data_array, new_nside):
-    extracted_data_array_new_nside = np.empty((2, 6, hp.nside2npix(new_nside)))
+    
+    array_length = hp.nside2npix(new_nside)
+    extracted_data_array_new_nside = np.empty((len(extracted_data_array[:, 0, 0]), len(extracted_data_array[0, :, 0]), array_length))
 
     # Fill the new array with downgraded maps
-    for i in range(2):
-        for j in range(6):
+    for i in range(np.shape(extracted_data_array_new_nside)[0]):
+        for j in range(np.shape(extracted_data_array_new_nside)[1]):
             extracted_data_array_new_nside[i, j, :] = hp.ud_grade(extracted_data_array[i, j, :], new_nside, order_in='NESTED', order_out='NESTED')
 
 
@@ -223,7 +221,6 @@ def stokes_reconstruction(parameters, constants, frequencies):
 
 def Chi2(parameters, frequencies, constants, stokes_arrays_correct_units, i):
     recreated_values = stokes_reconstruction(parameters, constants, frequencies)
-
     """
     This function quantifies the fit of the modelled emission vs the emission from the data. The recreated emission is calculated in the stokes_reconstruction function.
     Chi^2 values are calculated for each of the 3 stokes parameters at each of the 2 input frequencies, then the sum of all of these 6 values is taken and returned as the Chi^2 value.
@@ -237,13 +234,17 @@ def Chi2(parameters, frequencies, constants, stokes_arrays_correct_units, i):
 
     #To optimize all three parameters, use this set:
     Chi2_Stokes_I = (recreated_values[:, 0] - stokes_arrays_correct_units[:, 0, i]) ** 2 / stokes_arrays_correct_units[:, 3, i]
-    Chi2_Stokes_Q = (recreated_values[:, 1] - stokes_arrays_correct_units[:, 1, i]) ** 2 / stokes_arrays_correct_units[:, 4, i]
+    Chi2_Stokes_Q = (recreated_values[:, 1] - stokes_arrays_correct_units[0:1, 1, i]) ** 2 / stokes_arrays_correct_units[:, 4, i]
     Chi2_Stokes_U = (recreated_values[:, 2] - stokes_arrays_correct_units[:, 2, i]) ** 2 / stokes_arrays_correct_units[:, 5, i]
 
     #To ignore the optimization of a parameter, uncomment the following lines and comment out the above lines:
-    #Chi2_Stokes_I = np.zeros(2)
-    #Chi2_Stokes_Q = np.zeros(2)
-    #Chi2_Stokes_U = np.zeros(2)
+    #Chi2_Stokes_I = np.zeros(len(frequencies))
+    #Chi2_Stokes_Q = np.zeros(len(frequencies))
+    #Chi2_Stokes_U = np.zeros(len(frequencies))
+
+
+    #Optimize Q 143
+    #return (recreated_values[2, 0] - stokes_arrays_correct_units[2, 0, i]) ** 2 / stokes_arrays_correct_units[2, 3, i]
 
     return np.sum(Chi2_Stokes_I) + np.sum(Chi2_Stokes_Q) + np.sum(Chi2_Stokes_U)
 
