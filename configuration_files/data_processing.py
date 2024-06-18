@@ -127,20 +127,30 @@ def stokes_arrays_in_MJy_sr(files, constants, frequencies):
     0,5: uu_cov_data_kcmb_217; 1,5: uu_cov_data_kcmb_353
     """
 
-    extracted_data_array = np.zeros((len(files), 6, len(extract_info(files[0])[0])))
-    for i in range(len(extracted_data_array[:, 0, 0])):
-        extracted_data_array[i, :, :] = extract_info(files[i])[:6]
+    files_length = len(files)
+    array_length = len(extract_info(files[0])[0])
+    num_parameters = 6
+    extracted_data_array = np.zeros((files_length, 6, array_length))
+
+    for i in range(files_length):
+        for j in range(num_parameters):
+            if extract_info(files[i])[j] is not None:
+                extracted_data_array[i, j, :] = extract_info(files[i])[j]
+            else: 
+                extracted_data_array[i, j, :] = np.nan            
 
     #conversion_factor_217, conversion_factor_353 = conversion_factors_Kcmb_to_MJy_sr(constants, frequencies)
     conversion_factors = conversion_factors_Kcmb_to_MJy_sr(constants, frequencies)
 
-    for freq in range(len(extracted_data_array[:, 0, 0])):
+    for freq in range(files_length):
         for parameter in range(0,3):
             #Multiply stokes I, Q, U by their frequency dependent conversion factor
-            extracted_data_array[freq, parameter, :] * conversion_factors[freq]
+            if extracted_data_array[freq, parameter, 0] is not np.nan:
+                extracted_data_array[freq, parameter, :] * conversion_factors[freq]
         for parameter in range(3, 6):
             #Multiply I, Q, U covariances by their frequency dependent conversion factor squared
-            extracted_data_array[freq, parameter, :] * conversion_factors[freq] ** 2
+            if extracted_data_array[freq, parameter, 0] is not np.nan:
+                extracted_data_array[freq, parameter, :] * conversion_factors[freq] ** 2
 
     return extracted_data_array
 
@@ -152,7 +162,10 @@ def decrease_resolution(extracted_data_array, new_nside):
     # Fill the new array with downgraded maps
     for i in range(np.shape(extracted_data_array_new_nside)[0]):
         for j in range(np.shape(extracted_data_array_new_nside)[1]):
-            extracted_data_array_new_nside[i, j, :] = hp.ud_grade(extracted_data_array[i, j, :], new_nside, order_in='NESTED', order_out='NESTED')
+            if extracted_data_array[i, j, 0] is not np.nan:
+                extracted_data_array_new_nside[i, j, :] = hp.ud_grade(extracted_data_array[i, j, :], new_nside, order_in='NESTED', order_out='NESTED')
+            else:
+                extracted_data_array_new_nside[i, j, :] = np.nan
 
 
     return extracted_data_array_new_nside
@@ -219,7 +232,9 @@ def stokes_reconstruction(parameters, constants, frequencies):
 
     return np.stack((stokes_i, stokes_q, stokes_u), axis=-1)
 
-def Chi2(parameters, frequencies, constants, stokes_arrays_correct_units, i):
+def Chi2(parameters, frequencies, constants, stokes_arrays_correct_units, arrays_to_optimize, i):
+    
+    
     recreated_values = stokes_reconstruction(parameters, constants, frequencies)
     """
     This function quantifies the fit of the modelled emission vs the emission from the data. The recreated emission is calculated in the stokes_reconstruction function.
@@ -231,6 +246,9 @@ def Chi2(parameters, frequencies, constants, stokes_arrays_correct_units, i):
     Inputs: Parameters array(will be optimized), frequencies, constants, stokes_arrays_correct_units, i (i is the index of the loop that this function must be run through)
     Outputs: Sum of all Chi^2 values for each stokes parameter across the array of frequencies
     """
+    #for coordinate in range(len(arrays_to_optimize)):
+
+
 
     #To optimize all three parameters, use this set:
     Chi2_Stokes_I = (recreated_values[:, 0] - stokes_arrays_correct_units[:, 0, i]) ** 2 / stokes_arrays_correct_units[:, 3, i]
