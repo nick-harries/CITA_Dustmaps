@@ -107,24 +107,19 @@ def stokes_arrays_in_MJy_sr(files, constants, frequencies):
     """
     This function calls the fits files and constants, and converts the stokes parameters and covariance arrays from kcmb/kcmb^2 to (MJy/sr)/(MJy/sr)^2. 
     First, it uses the constants and frequencies of the files to compute conversion factors between the units, then returns the converted values.
-    For time-saving sake, the returned values are all in a single array of shape (2, 6, 50331648*).
-    The 2 refers to the two frequencies of the fits files being used;
-    The 6 refers to stokes_i, stokes_q, stokes_u, i_covariance, q_covariance, u_covariance, in that order;
-    The 50331648 is the length of each of the arrays, this number is dependant on the specific fits file being input.
+    For time-saving sake, the returned values are all in a single array of shape (n, 6, l), where n is the number of files being read, 6 corresponds to the 3 stokes parameters (I, Q, U) and their associated covariances, and l is the length of the arrays within the file.
+    This is soft-coded so that if a fits file does not contain an array for a specific parameter, the parameter is filled in with NAN indices.
 
     Input: list/array/tuple of fits file names as strings, tuple of constants, array of frequencies of the files being input(externally created)
-    Output: Array of shape (2, 6, 50331648*) containing stokes parameters and associated covariances at two different frequencies, all converted from units of Kcmb to MJy/sr
+    Output: Array of shape (n, 6, l) containing stokes parameters and associated covariances at n different frequencies, all converted from units of Kcmb to MJy/sr, columns of NAN in the place of any parameter with missing data
     """
 
 
     """ 
     The layout of the data array is:
-    0,0: i_stokes_data_kcmb_217; 1,0: i_stokes_data_kcmb_353
-    0,1: q_stokes_data_kcmb_217; 1,1: q_stokes_data_kcmb_353
-    0,2: u_stokes_data_kcmb_217; 1,2: u_stokes_data_kcmb_353
-    0,3: ii_cov_data_kcmb_217; 1,3: ii_cov_data_kcmb_353
-    0,4: qq_cov_data_kcmb_217; 1,4: qq_cov_data_kcmb_353
-    0,5: uu_cov_data_kcmb_217; 1,5: uu_cov_data_kcmb_353
+    [i, 0, :]. [i, 3, :] = stokes I array for frequency i, stokes I covariance array for frequency i
+    [i, 1, :], [i, 4, :] = stokes Q array for frequency i, stokes Q covariance array for frequency i
+    [i, 2, :], [i, 5, :] = stokes U array for frequency i, stokes U covariance array for frequency i
     """
 
     files_length = len(files)
@@ -132,42 +127,50 @@ def stokes_arrays_in_MJy_sr(files, constants, frequencies):
     num_parameters = 6
     extracted_data_array = np.zeros((files_length, 6, array_length))
 
-    for i in range(files_length):
-        for j in range(num_parameters):
-            if extract_info(files[i])[j] is not None:
+    for i in range(files_length):#For each file
+        for j in range(num_parameters):#For each stokes parameter/covariance
+            if extract_info(files[i])[j] is not None:#If the data exists
                 extracted_data_array[i, j, :] = extract_info(files[i])[j]
-            else: 
+            else: #If the data does not exist
                 extracted_data_array[i, j, :] = np.nan            
 
 
-    #conversion_factor_217, conversion_factor_353 = conversion_factors_Kcmb_to_MJy_sr(constants, frequencies)
     conversion_factors = conversion_factors_Kcmb_to_MJy_sr(constants, frequencies)
 
-    for freq in range(files_length):
-        for parameter in range(0,3):
+    for freq in range(files_length): #For each frequency
+        for parameter in range(0,3): #For each stokes parameter
             #Multiply stokes I, Q, U by their frequency dependent conversion factor
-            if not np.isnan(extracted_data_array[freq, parameter, 0]):
+            if not np.isnan(extracted_data_array[freq, parameter, 0]): #Only convert columns where data exists
                 extracted_data_array[freq, parameter, :] * conversion_factors[freq]
 
-        for parameter in range(3, 6):
+        for parameter in range(3, 6): #For each stokes parameter covariance
             #Multiply I, Q, U covariances by their frequency dependent conversion factor squared
-            if not np.isnan(extracted_data_array[freq, parameter, 0]):
+            if not np.isnan(extracted_data_array[freq, parameter, 0]): #Only convert columns where data exists
                 extracted_data_array[freq, parameter, :] * conversion_factors[freq] ** 2
 
     return extracted_data_array
 
 def decrease_resolution(extracted_data_array, new_nside):
-    
+    """ 
+    This function serves to decrease the resolution of the map extracted from the fits file. Less resolved maps have shorter arrays and can therefore be optimized quicker, for troubleshooting.
+    The new_nside argument specifies the nside resolution that the outputted map will have.
+    This function reads the first element of each column of the inputted array to see if it contains data or NAN (Which means the associated file/frequency does not have data for that parameter), only columns with numerical data will have resolution changed, empty columns remain empty.
+
+    Input: Multidimensional array extracted from 'stokes_arrays_in_MJy_sr' function, desired nside value for that array
+    Output: Multidimensional array of shape (n, 6, l), where n is the number of frequencies/files being used, 6 columns for the 3 stokes parameters and their associated covariances, l is the length of an array of nside=new_nside.
+    """
+
+    #Create blank array of shape (n, 6, l)
     array_length = hp.nside2npix(new_nside)
     extracted_data_array_new_nside = np.empty((len(extracted_data_array[:, 0, 0]), len(extracted_data_array[0, :, 0]), array_length))
 
     # Fill the new array with downgraded maps
-    for i in range(np.shape(extracted_data_array_new_nside)[0]):
-        for j in range(np.shape(extracted_data_array_new_nside)[1]):
-            if not np.isnan(extracted_data_array[i, j, 0]):
+    for i in range(np.shape(extracted_data_array_new_nside)[0]):#For each file/frequency
+        for j in range(np.shape(extracted_data_array_new_nside)[1]): #For each parameter/covariance
+            if not np.isnan(extracted_data_array[i, j, 0]):#If the data exists
                 extracted_data_array_new_nside[i, j, :] = hp.ud_grade(extracted_data_array[i, j, :], new_nside, order_in='NESTED', order_out='NESTED')
             else:
-                extracted_data_array_new_nside[i, j, :] = np.nan
+                extracted_data_array_new_nside[i, j, :] = np.nan #If no data, create empty column
 
         
     return extracted_data_array_new_nside
@@ -240,39 +243,26 @@ def Chi2(parameters, frequencies, constants, stokes_arrays_correct_units, arrays
     recreated_values = stokes_reconstruction(parameters, constants, frequencies)
     """
     This function quantifies the fit of the modelled emission vs the emission from the data. The recreated emission is calculated in the stokes_reconstruction function.
-    Chi^2 values are calculated for each of the 3 stokes parameters at each of the 2 input frequencies, then the sum of all of these 6 values is taken and returned as the Chi^2 value.
-    This recreated emission values are a function of the 'parameters' array that is called, the indices of this array will be optimized to minimize the value returned by this function.
-    This function calculates the Chi^2 value for a single pixel, it must be used in a loop over all pixels of the data that you are trying to recreate.
-    The stokes_arrays_correct_units element that is called is the data from the fits file after being converted from Kcmb to MJy/sr. It must be extracted and called from outside of the function to greatly improve efiiciency.
+    Within the 'execute_Chi2_optimization' function of the 'parameter_optimizer.py' code, a list called 'arrays_to_optimize' is created, this list contains the coordinates within the 'stokes_arrays_correct_units' -
+    - array that contain numerical data. Then, the pixels within these columns are explicitely used to calculate the Chi2 value. Columns can be full of NAN indices if the fits file does not contain data for that parameter, this is meant to ignore those columns.
+    Any stokes parameter column that contains data is assumed to contain an associated covariance column that is 3 indices farther down in the stokes_array_correct_units array. This shift is fundamental to how the arrays are extracted amd stored from the fits files so should not need to be changed despite its 'hard-coding'.
+    The Chi2 value is calculated based off of the fit of the emission model with an initial set of parameters compared to the data from the fits files, the parameters are then optimized to find the smallest possible Chi2 value, thus the best fitting parameters.
 
-    Inputs: Parameters array(will be optimized), frequencies, constants, stokes_arrays_correct_units, i (i is the index of the loop that this function must be run through)
-    Outputs: Sum of all Chi^2 values for each stokes parameter across the array of frequencies
+    Inputs: Parameters array(will be optimized), frequencies, constants, stokes_arrays_correct_units, arrays_to_optimize list, i (i is the index of the loop that this function must be run through, it is defined in the 'execute_Chi2_optimization function)
+    Outputs: Sum of all Chi^2 values for each stokes parameters across the array of frequencies
     """
     Chi2 = 0
-    for coordinate in arrays_to_optimize:
+    for coordinate in arrays_to_optimize: #Sum over all of the individual Chi2 values for each column where data exists
         x, y = coordinate
         Chi2 += (recreated_values[x, y]  - stokes_arrays_correct_units[x, y, i]) ** 2 / stokes_arrays_correct_units[x, y + 3 , i]
 
     return Chi2
 
 
-    #To optimize all three parameters, use this set:
-    #Chi2_Stokes_I = (recreated_values[:, 0] - stokes_arrays_correct_units[:, 0, i]) ** 2 / stokes_arrays_correct_units[:, 3, i]
-    #Chi2_Stokes_Q = (recreated_values[:, 1] - stokes_arrays_correct_units[:, 1, i]) ** 2 / stokes_arrays_correct_units[:, 4, i]
-    #Chi2_Stokes_U = (recreated_values[:, 2] - stokes_arrays_correct_units[:, 2, i]) ** 2 / stokes_arrays_correct_units[:, 5, i]
-
-    #To ignore the optimization of a parameter, uncomment the following lines and comment out the above lines:
-    #Chi2_Stokes_I = np.zeros(len(frequencies))
-    #Chi2_Stokes_Q = np.zeros(len(frequencies))
-    #Chi2_Stokes_U = np.zeros(len(frequencies))
-
-
-    #Optimize Q 143
-    #return (recreated_values[2, 0] - stokes_arrays_correct_units[2, 0, i]) ** 2 / stokes_arrays_correct_units[2, 3, i]
-
-    #return np.sum(Chi2_Stokes_I) + np.sum(Chi2_Stokes_Q) + np.sum(Chi2_Stokes_U)
-
 def define_bounds():
+    """ 
+    This is where the bounds that set the limits of optimization will be set.
+    """
     return [(-np.infty, np.infty), #T
           (-np.infty, np.infty), #Beta
           (-np.infty, np.infty), #Tau
