@@ -139,17 +139,19 @@ def stokes_arrays_in_MJy_sr(files, constants, frequencies):
             else: 
                 extracted_data_array[i, j, :] = np.nan            
 
+
     #conversion_factor_217, conversion_factor_353 = conversion_factors_Kcmb_to_MJy_sr(constants, frequencies)
     conversion_factors = conversion_factors_Kcmb_to_MJy_sr(constants, frequencies)
 
     for freq in range(files_length):
         for parameter in range(0,3):
             #Multiply stokes I, Q, U by their frequency dependent conversion factor
-            if extracted_data_array[freq, parameter, 0] is not np.nan:
+            if not np.isnan(extracted_data_array[freq, parameter, 0]):
                 extracted_data_array[freq, parameter, :] * conversion_factors[freq]
+
         for parameter in range(3, 6):
             #Multiply I, Q, U covariances by their frequency dependent conversion factor squared
-            if extracted_data_array[freq, parameter, 0] is not np.nan:
+            if not np.isnan(extracted_data_array[freq, parameter, 0]):
                 extracted_data_array[freq, parameter, :] * conversion_factors[freq] ** 2
 
     return extracted_data_array
@@ -162,12 +164,12 @@ def decrease_resolution(extracted_data_array, new_nside):
     # Fill the new array with downgraded maps
     for i in range(np.shape(extracted_data_array_new_nside)[0]):
         for j in range(np.shape(extracted_data_array_new_nside)[1]):
-            if extracted_data_array[i, j, 0] is not np.nan:
+            if not np.isnan(extracted_data_array[i, j, 0]):
                 extracted_data_array_new_nside[i, j, :] = hp.ud_grade(extracted_data_array[i, j, :], new_nside, order_in='NESTED', order_out='NESTED')
             else:
                 extracted_data_array_new_nside[i, j, :] = np.nan
 
-
+        
     return extracted_data_array_new_nside
 
 def conversion_factors_Kcmb_to_MJy_sr(constants, frequencies):
@@ -246,14 +248,18 @@ def Chi2(parameters, frequencies, constants, stokes_arrays_correct_units, arrays
     Inputs: Parameters array(will be optimized), frequencies, constants, stokes_arrays_correct_units, i (i is the index of the loop that this function must be run through)
     Outputs: Sum of all Chi^2 values for each stokes parameter across the array of frequencies
     """
-    #for coordinate in range(len(arrays_to_optimize)):
+    Chi2 = 0
+    for coordinate in arrays_to_optimize:
+        x, y = coordinate
+        Chi2 += (recreated_values[x, y]  - stokes_arrays_correct_units[x, y, i]) ** 2 / stokes_arrays_correct_units[x, y + 3 , i]
 
+    return Chi2
 
 
     #To optimize all three parameters, use this set:
-    Chi2_Stokes_I = (recreated_values[:, 0] - stokes_arrays_correct_units[:, 0, i]) ** 2 / stokes_arrays_correct_units[:, 3, i]
-    Chi2_Stokes_Q = (recreated_values[:, 1] - stokes_arrays_correct_units[0:1, 1, i]) ** 2 / stokes_arrays_correct_units[:, 4, i]
-    Chi2_Stokes_U = (recreated_values[:, 2] - stokes_arrays_correct_units[:, 2, i]) ** 2 / stokes_arrays_correct_units[:, 5, i]
+    #Chi2_Stokes_I = (recreated_values[:, 0] - stokes_arrays_correct_units[:, 0, i]) ** 2 / stokes_arrays_correct_units[:, 3, i]
+    #Chi2_Stokes_Q = (recreated_values[:, 1] - stokes_arrays_correct_units[:, 1, i]) ** 2 / stokes_arrays_correct_units[:, 4, i]
+    #Chi2_Stokes_U = (recreated_values[:, 2] - stokes_arrays_correct_units[:, 2, i]) ** 2 / stokes_arrays_correct_units[:, 5, i]
 
     #To ignore the optimization of a parameter, uncomment the following lines and comment out the above lines:
     #Chi2_Stokes_I = np.zeros(len(frequencies))
@@ -264,7 +270,7 @@ def Chi2(parameters, frequencies, constants, stokes_arrays_correct_units, arrays
     #Optimize Q 143
     #return (recreated_values[2, 0] - stokes_arrays_correct_units[2, 0, i]) ** 2 / stokes_arrays_correct_units[2, 3, i]
 
-    return np.sum(Chi2_Stokes_I) + np.sum(Chi2_Stokes_Q) + np.sum(Chi2_Stokes_U)
+    #return np.sum(Chi2_Stokes_I) + np.sum(Chi2_Stokes_Q) + np.sum(Chi2_Stokes_U)
 
 def define_bounds():
     return [(-np.infty, np.infty), #T

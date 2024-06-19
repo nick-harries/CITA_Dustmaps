@@ -4,22 +4,20 @@ import healpy as hp
 from statistics import mode
 
 
-def plot_recreated_values_and_fit(stokes_arrays_reconstructed, stokes_arrays_correct_units, starting_index, ending_index, frequencies):
+def plot_recreated_values_and_fit(stokes_arrays_reconstructed, stokes_arrays_correct_units, arrays_to_optimize, starting_index, ending_index, frequencies):
     """
     This function calls the array created by the execute_Chi2_optimization function, as well as the Planck data. It then plots the modelled emission next to the true emission for each frequency and stokes parameter.
     """
     Stokes_parameters = ['I', 'Q', 'U']
     for freq in range(np.shape(stokes_arrays_reconstructed)[0]):
         for parameter in range(np.shape(stokes_arrays_reconstructed)[1]):
-            print(Stokes_parameters[parameter])
-            if np.any(stokes_arrays_correct_units[freq, parameter, :] != 0):
-
+            plt.figure()
+            if [freq, parameter] in arrays_to_optimize:                
                 residual = stokes_arrays_correct_units[freq, parameter, starting_index:ending_index] - stokes_arrays_reconstructed[freq, parameter, :]
-                plt.figure()
                 plt.subplot(2,2 ,1)
                 plt.title('Stokes %s %.2e (boundless)'%(Stokes_parameters[parameter], frequencies[freq]))
                 plt.plot(stokes_arrays_correct_units[freq, parameter, starting_index:ending_index], color='red', label='data')
-                plt.plot(stokes_arrays_reconstructed[freq, parameter, :], color='blue', label='model')
+                plt.plot(stokes_arrays_reconstructed[freq, parameter], color='blue', label='model')
                 plt.xlabel('Index Number')
                 plt.ylabel('Intensity (MJy/sr)')
                 plt.legend(loc='upper right')
@@ -30,21 +28,31 @@ def plot_recreated_values_and_fit(stokes_arrays_reconstructed, stokes_arrays_cor
                 plt.xlabel('Index Number')
                 plt.ylabel('Intensity (MJy/sr)')
 
-                plt.subplot(2, 2, 3)                
-                plt.title('Stokes %s %.2e model'%(Stokes_parameters[parameter], frequencies[freq]))
-                plt.plot(stokes_arrays_reconstructed[freq, parameter, :], color='blue')
-                plt.xlabel('Index Number')
-                plt.ylabel('Intensity (MJy/sr)')
-
                 plt.subplot(2, 2, 4)
                 plt.title('Stokes %s %.2e residual'%(Stokes_parameters[parameter], frequencies[freq]))
                 plt.plot(residual, color='black')
                 plt.xlabel('Index Number')
                 plt.ylabel('Intensity (MJy/sr)')
+            else:
+                plt.subplot(2, 2, 1)
+                plt.title('No data Stokes %s %.2e'%(Stokes_parameters[parameter], frequencies[freq]))
+                plt.plot()
 
-                plt.tight_layout()
-                #plt.show()
-    plt.show()
+                plt.subplot(2, 2, 2)
+                plt.title('No data Stokes %s %.2e'%(Stokes_parameters[parameter], frequencies[freq]))
+                plt.plot()
+
+                plt.subplot(2, 2, 4)
+                plt.title('No data Stokes %s %.2e'%(Stokes_parameters[parameter], frequencies[freq]))
+                plt.plot()
+
+            plt.subplot(2, 2, 3)
+            plt.title('Stokes %s %.2e GHz model'%(Stokes_parameters[parameter], frequencies[freq]))
+            plt.plot(stokes_arrays_reconstructed[freq, parameter], color='blue')
+            plt.xlabel('Index Number')
+            plt.ylabel('Intensity (MJy/sr')
+            plt.tight_layout()
+        plt.show()
                 
 def plot_optimized_parameters(optimized_parameters_array):
     """
