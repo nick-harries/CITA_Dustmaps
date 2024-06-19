@@ -5,8 +5,8 @@ from scipy.optimize import minimize
 
 
 # Define the directory containing configuration files and data_processing.py
-config_directory = '/home/nicholas-harries/Desktop/Planck_copies/configuration_files'
-fits_directory = '/home/nicholas-harries/Desktop/Planck_copies/fits_files'
+config_directory = '/home/nharries/Desktop/CITA_Dustmaps/CITA_Dustmaps/configuration_files'
+fits_directory = '/home/nharries/Desktop/CITA_Dustmaps/CITA_Dustmaps/fits_files'
 
 # Add the configuration directory to the system path
 sys.path.append(config_directory)
@@ -54,11 +54,16 @@ def execute_Chi2_optimization(constants, stokes_arrays_correct_units, bounds, pa
     Output: Array of shape (n,13), where n is the number of pixels that have been optimized. This array contains modelled emission based off of the optimized parameters in both frequencies, the optimized parameters corresponding to each pixel, and the optimized Chi^2 value for each pixel.
     """
     
+    print('shape: ', np.shape(stokes_arrays_correct_units))
     arrays_to_optimize = []
     for file_number in range(np.shape(stokes_arrays_correct_units)[0]):
-        for parameter in range(np.shape(stokes_arrays_correct_units)[1]):
-            if stokes_arrays_correct_units[file_number, parameter, 0] is not np.nan:
+        for parameter in range(3):
+            if not np.isnan(stokes_arrays_correct_units[file_number, parameter, 0]):
                 arrays_to_optimize.append([file_number, parameter])
+
+            else:
+                print('%.2e GHz parameter no. %d is Nan'%(frequencies[file_number], parameter))
+
 
     print(arrays_to_optimize)
    
@@ -70,22 +75,27 @@ def execute_Chi2_optimization(constants, stokes_arrays_correct_units, bounds, pa
     stokes_arrays_reconstructed = np.zeros((len(frequencies), 3, length_of_sample))
     optimized_parameters_array = np.zeros((length_of_sample, 7))
 
-    optimize_methods = ['Nelder-Mead', 'TNC', 'Powell', 'Trust-Constr']
+    optimize_methods = ['BFGS', 'TNC', 'Powell']
+    tally_count = [0, 0, 0, 0]
+
 
     j = 0
     for i in range(starting_index, ending_index): #Range of i is the range of indices of the real data that we will optimize parameters for
 
-        optimized_params = minimize(Chi2, parameters, args=(frequencies, constants, stokes_arrays_correct_units, arrays_to_optimize, i), method='BFGS')#, bounds=bounds)
+        optimized_params = minimize(Chi2, parameters, args=(frequencies, constants, stokes_arrays_correct_units, arrays_to_optimize, i), method='Nelder-Mead')#, bounds=bounds)
         minimized_Chi_2 = optimized_params.fun
 
-        for method in optimize_methods:
+        for idx, method in enumerate(optimize_methods):
             try:
-                alternate_optimization = minimize(Chi2, parameters, args=(frequencies, constants, stokes_arrays_correct_units, arrays_to_optimize, i), method=optimize_methods[method])#, bounds=bounds)
+                # Alternate optimization with different methods
+                alternate_optimization = minimize(Chi2, parameters, args=(frequencies, constants, stokes_arrays_correct_units, arrays_to_optimize, i), method=method) #, bounds=bounds)
                 if alternate_optimization.fun < minimized_Chi_2:
                     minimized_Chi_2 = alternate_optimization.fun
                     optimized_params = alternate_optimization
+                    tally_count[idx + 1] += 1  # Increment the correct tally count
             except:
                 continue
+
 
 
         recreated_values = stokes_reconstruction(optimized_params.x, constants, frequencies) #Models emission based off of the optimized parameters, returns I, Q, U values in 217Ghz and 353Ghz
@@ -98,15 +108,17 @@ def execute_Chi2_optimization(constants, stokes_arrays_correct_units, bounds, pa
             optimized_parameters_array[j, param] = optimized_params.x[param]
         optimized_parameters_array[j, 6] = minimized_Chi_2
 
-        print(j)
         j+=1
 
-    return stokes_arrays_reconstructed, optimized_parameters_array, starting_index, ending_index
+    tally_count[0] = length_of_sample - tally_count[1] - tally_count[2] - tally_count[3] - tally_count[4]
+    print('tally count: ', tally_count)
 
-stokes_arrays_reconstructed, optimized_parameters_array, starting_index, ending_index = execute_Chi2_optimization(constants, stokes_arrays_correct_units, bounds, parameters, frequencies)
+    return stokes_arrays_reconstructed, optimized_parameters_array, arrays_to_optimize, starting_index, ending_index
 
+stokes_arrays_reconstructed, optimized_parameters_array, arrays_to_optimize, starting_index, ending_index = execute_Chi2_optimization(constants, stokes_arrays_correct_units, bounds, parameters, frequencies)
 
-plot_recreated_values_and_fit(stokes_arrays_reconstructed, stokes_arrays_correct_units, starting_index, ending_index, frequencies)
+print('DONE')
+plot_recreated_values_and_fit(stokes_arrays_reconstructed, stokes_arrays_correct_units, arrays_to_optimize, starting_index, ending_index, frequencies)
 #plot_optimized_parameters(optimized_parameters_array)
 plot_minimized_Chi2(optimized_parameters_array)
 #plot_optimized_parameters_histograms(optimized_parameters_array)
