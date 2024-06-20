@@ -2,6 +2,7 @@ import sys
 import os
 import numpy as np
 from scipy.optimize import minimize
+import re
 
 
 
@@ -12,13 +13,20 @@ The preamble creates the frequencies array, bounds list, calls the necessary fun
 The bounds are defined in the data_processing code and can be changed there. The only variable that might need to be changed on this code is the 'nside', which is the resolution that you degrade the arrays to.
 """
 
-# Define the directory containing configuration files and data_processing.py
-#config_directory = '/home/nharries/Desktop/CITA_Dustmaps/CITA_Dustmaps/configuration_files'
-#fits_directory = '/home/nharries/Desktop/CITA_Dustmaps/CITA_Dustmaps/fits_files'
 
-config_directory = '/home/nicholas-harries/Desktop/Planck_copies/configuration_files'
-fits_directory = '/home/nicholas-harries/Desktop/Planck_copies/fits_files'
 
+# Read the file that you have set up with your directory paths
+tex_file_path = 'directories.tex'
+with open(tex_file_path, 'r') as file:
+    tex_content = file.read()
+config_dir_match = re.search(r"Configuration files directory:\s*'(.+?)'", tex_content)
+fits_dir_match = re.search(r"Fits files directory:\s*'(.+?)'", tex_content)
+# Define the directories
+if config_dir_match and fits_dir_match:
+    config_directory = config_dir_match.group(1)
+    fits_directory = fits_dir_match.group(1)
+else:
+    raise ValueError("Directory paths not found in the tex file.")
 # Add the configuration directory to the system path
 sys.path.append(config_directory)
 
