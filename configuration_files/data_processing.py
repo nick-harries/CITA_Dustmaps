@@ -1,6 +1,7 @@
 from astropy.io import fits
 import healpy as hp
 import numpy as np
+import re
 
 def extract_info(fits_file):
 
@@ -21,23 +22,33 @@ def extract_info(fits_file):
                     nest_type = True
                 else:
                     nest_type = False
+            else:
+                print('nest type of %s unknown...'%fits_file)
+                exit
 
             if hdul[1].data is not None:
                 data = hdul[1].data
-
+               
                 if 'I_STOKES' in data.dtype.names:
-                    epsilon = 1e-10
                     i_stokes_data = data['I_STOKES']
                     i_stokes_data[i_stokes_data < 0] = 0 #This line resets physically impossible negative values to 0
+                elif 'INTENSITY' in data.dtype.names:
+                    i_stokes_data = data['INTENSITY'].flatten()
+                    i_stokes_data[i_stokes_data < 0] = 0
+
                 else:
                     i_stokes_data = None
 
                 if 'Q_STOKES' in data.dtype.names:
                     q_stokes_data = data['Q_STOKES']
+                elif 'Q-POLARISATION' in data.dtype.names:
+                    q_stokes_data = data['Q-POLARISATION'].flatten()
                 else:
                     q_stokes_data = None
                 if 'U_STOKES' in data.dtype.names:
                     u_stokes_data = data['U_STOKES']
+                elif 'U-POLARISATION' in data.dtype.names:
+                    u_stokes_data = data['U-POLARISATION'].flatten()
                 else:
                     u_stokes_data = None
 
@@ -127,6 +138,7 @@ def stokes_arrays_in_MJy_sr(files, constants, frequencies):
     num_parameters = 6
     extracted_data_array = np.zeros((files_length, 6, array_length))
 
+    print('seeing which parameters exist ...')
     for i in range(files_length):#For each file
         for j in range(num_parameters):#For each stokes parameter/covariance
             if extract_info(files[i])[j] is not None:#If the data exists
@@ -134,9 +146,12 @@ def stokes_arrays_in_MJy_sr(files, constants, frequencies):
             else: #If the data does not exist
                 extracted_data_array[i, j, :] = np.nan            
 
-
+    print('calculating conversion factors ...')
     conversion_factors = conversion_factors_Kcmb_to_MJy_sr(constants, frequencies)
+    print('conversion factors calculated as: ', conversion_factors)
 
+
+    print('converting arrays')
     for freq in range(files_length): #For each frequency
         for parameter in range(0,3): #For each stokes parameter
             #Multiply stokes I, Q, U by their frequency dependent conversion factor
@@ -150,7 +165,7 @@ def stokes_arrays_in_MJy_sr(files, constants, frequencies):
 
     return extracted_data_array
 
-def decrease_resolution(extracted_data_array, new_nside):
+def decrease_resolution(extracted_data_array, nest_type, new_nside):
     """ 
     This function serves to decrease the resolution of the map extracted from the fits file. Less resolved maps have shorter arrays and can therefore be optimized quicker, for troubleshooting.
     The new_nside argument specifies the nside resolution that the outputted map will have.
@@ -159,6 +174,11 @@ def decrease_resolution(extracted_data_array, new_nside):
     Input: Multidimensional array extracted from 'stokes_arrays_in_MJy_sr' function, desired nside value for that array
     Output: Multidimensional array of shape (n, 6, l), where n is the number of frequencies/files being used, 6 columns for the 3 stokes parameters and their associated covariances, l is the length of an array of nside=new_nside.
     """
+    if nest_type == True:
+        order='NESTEiD'
+    else:
+        order='RING'
+
 
     #Create blank array of shape (n, 6, l)
     array_length = hp.nside2npix(new_nside)
@@ -168,7 +188,7 @@ def decrease_resolution(extracted_data_array, new_nside):
     for i in range(np.shape(extracted_data_array_new_nside)[0]):#For each file/frequency
         for j in range(np.shape(extracted_data_array_new_nside)[1]): #For each parameter/covariance
             if not np.isnan(extracted_data_array[i, j, 0]):#If the data exists
-                extracted_data_array_new_nside[i, j, :] = hp.ud_grade(extracted_data_array[i, j, :], new_nside, order_in='NESTED', order_out='NESTED')
+                extracted_data_array_new_nside[i, j, :] = hp.ud_grade(extracted_data_array[i, j, :], new_nside, order_in=order, order_out='NESTED')
             else:
                 extracted_data_array_new_nside[i, j, :] = np.nan #If no data, create empty column
 
@@ -254,10 +274,15 @@ def Chi2(parameters, frequencies, constants, stokes_arrays_correct_units, arrays
     Chi2 = 0
     for coordinate in arrays_to_optimize: #Sum over all of the individual Chi2 values for each column where data exists
         x, y = coordinate
-        Chi2 += (recreated_values[x, y]  - stokes_arrays_correct_units[x, y, i]) ** 2 / stokes_arrays_correct_units[x, y + 3 , i]
-
+        Chi2 += np.abs((recreated_values[x, y]  - stokes_arrays_correct_units[x, y, i]))# ** 2 / stokes_arrays_correct_units[x, y + 3 , i]
     return Chi2
-
+    
+    #Uncomment the following loop and comment the loop above to optimize a specific parameter. The x coordinate is frequency, the y coordinate is the parameter
+    #for coordinate in arrays_to_optimize:
+    #    x, y = coordinate
+    #    if (x,y) == (1,1): #Choose x=1(217GHz), y=1(Stokes Q) as an example
+    #        Chi2 += np.abs((recreated_values[x, y] - stokes_arrays_correct_units[x, y, i]))
+    #return Chi2
 
 def define_bounds():
     """ 
@@ -269,3 +294,8 @@ def define_bounds():
           (-np.infty, np.infty), #Psi(radians)
           (-np.infty, np.infty), #Alpha
           (-np.infty, np.infty)] #p_frac
+
+
+def extract_number(filename):
+    match = re.search(r'(\d+)', filename)
+    return int(match.group(0)) if match else 0
