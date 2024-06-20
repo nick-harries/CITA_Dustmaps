@@ -31,11 +31,12 @@ else:
 sys.path.append(config_directory)
 
 # Import the necessary functions from the associated codes.
-from data_processing import extract_info, extract_constants_and_parameters, stokes_arrays_in_MJy_sr, decrease_resolution, conversion_factors_Kcmb_to_MJy_sr, blackbody_function, stokes_reconstruction, Chi2, define_bounds
+from data_processing import extract_info, extract_constants_and_parameters, stokes_arrays_in_MJy_sr, decrease_resolution, conversion_factors_Kcmb_to_MJy_sr, blackbody_function, stokes_reconstruction, Chi2, define_bounds, extract_number
 from plot_functions import plot_recreated_values_and_fit, plot_optimized_parameters, plot_optimized_parameters_histograms, plot_minimized_Chi2
 
 # List all FITS files in the directory and create 'files' array to be used to extract stokes arrays
 fits_files = [file for file in os.listdir(fits_directory) if file.endswith('.fits')]
+fits_files = sorted(fits_files, key = extract_number)
 files = [os.path.join(fits_directory, file) for file in fits_files]
 
 
@@ -50,12 +51,22 @@ bounds = define_bounds()
 frequencies = np.zeros(len(files))
 for f in range(len(files)):
     frequencies[f] = np.float64(extract_info(files[f])[6])
+frequencies = np.array([1.43e11, 2.17e11, 3.43e11, 5.45e11, 8.57e11])
 print(frequencies)
 
 #Define nside resolution to change stokes arrays to, then extract information from fits files, change units to MJy/sr, change resolution, and store array
-nside = 32
+
+
+
+nside = 128
+print('nside: ', nside)
+nest_type = extract_info(files[0])[-1]
+
+print('creating arrays ...')
 stokes_arrays_full_resolution = stokes_arrays_in_MJy_sr(files, constants, frequencies)
-stokes_arrays_correct_units = decrease_resolution(stokes_arrays_full_resolution, nside)
+stokes_arrays_correct_units = decrease_resolution(stokes_arrays_full_resolution, nest_type, nside)
+print('arrays created ...')
+
 
 def execute_Chi2_optimization(constants, stokes_arrays_correct_units, bounds, parameters, frequencies):
     """
@@ -76,16 +87,18 @@ def execute_Chi2_optimization(constants, stokes_arrays_correct_units, bounds, pa
     """
 
     #Create list of which indices contain numerical data and should be used to calculate Chi2
+
+    print('create coordinates list...')
     arrays_to_optimize = []
     for file_number in range(np.shape(stokes_arrays_correct_units)[0]):
         for parameter in range(3):
             if not np.isnan(stokes_arrays_correct_units[file_number, parameter, 0]):
                 arrays_to_optimize.append([file_number, parameter])
-   
+    print(arrays_to_optimize)   
    
 
-    length_of_sample = int(100)
-    starting_index = int(1.5e3)
+    length_of_sample = int(len(stokes_arrays_correct_units[0, 0, :]))
+    starting_index = int(0)
     ending_index = int(starting_index + length_of_sample)
 
     stokes_arrays_reconstructed = np.zeros((len(frequencies), 3, length_of_sample))
@@ -94,6 +107,7 @@ def execute_Chi2_optimization(constants, stokes_arrays_correct_units, bounds, pa
     optimize_methods = ['BFGS', 'TNC', 'Powell']
     tally_count = [0, 0, 0, 0]
 
+    print('begin optimization, starting index: %d, ending index: %d ...'%(starting_index, ending_index))
     j = 0
     for i in range(starting_index, ending_index): #Range of i is the range of indices of the real data that we will optimize parameters for
 
@@ -123,6 +137,7 @@ def execute_Chi2_optimization(constants, stokes_arrays_correct_units, bounds, pa
             optimized_parameters_array[j, param] = optimized_params.x[param]
         optimized_parameters_array[j, 6] = minimized_Chi_2 #Store the minimal Chi2 value for the pixel in the last column of the array
 
+        print(j, '%.3e'%minimized_Chi_2)
         j+=1 #Update index number for storing in arrays
 
     tally_count[0] = length_of_sample - tally_count[1] - tally_count[2] - tally_count[3] #Number of times the initial method is used is the length of the array minus the number of times the other methods were used.
@@ -131,6 +146,10 @@ def execute_Chi2_optimization(constants, stokes_arrays_correct_units, bounds, pa
     return stokes_arrays_reconstructed, optimized_parameters_array, arrays_to_optimize, starting_index, ending_index
 
 stokes_arrays_reconstructed, optimized_parameters_array, arrays_to_optimize, starting_index, ending_index = execute_Chi2_optimization(constants, stokes_arrays_correct_units, bounds, parameters, frequencies)
+print(np.shape(stokes_arrays_reconstructed))
+print(np.shape(optimized_parameters_array))
+np.save('Stokes_Arrays_CMB_Removed_nside_%d'%nside, stokes_arrays_reconstructed)
+np.save('Parameters_Arrays_CMB_Removed_nside_%d'%nside, optimized_parameters_array)
 
 print('Plotting ...')
 plot_recreated_values_and_fit(stokes_arrays_reconstructed, stokes_arrays_correct_units, arrays_to_optimize, starting_index, ending_index, frequencies)
