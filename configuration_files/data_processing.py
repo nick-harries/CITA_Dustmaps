@@ -146,7 +146,7 @@ def stokes_arrays_in_MJy_sr(files, constants, frequencies):
             else: #If the data does not exist
                 extracted_data_array[i, j, :] = np.nan            
 
-    print('calculating conversion factors ...')
+    print('calculating Kcmb to MJy/sr conversion factors ...')
     conversion_factors = conversion_factors_Kcmb_to_MJy_sr(constants, frequencies)
     print('conversion factors calculated as: ', conversion_factors)
 
@@ -175,7 +175,7 @@ def decrease_resolution(extracted_data_array, nest_type, new_nside):
     Output: Multidimensional array of shape (n, 6, l), where n is the number of frequencies/files being used, 6 columns for the 3 stokes parameters and their associated covariances, l is the length of an array of nside=new_nside.
     """
     if nest_type == True:
-        order='NESTEiD'
+        order='NESTED'
     else:
         order='RING'
 
@@ -204,9 +204,9 @@ def conversion_factors_Kcmb_to_MJy_sr(constants, frequencies):
     Inputs: Array of frequency values. These should be previously defined before calling this function. Tuple of constants.
     Returns: Array of conversion factors corresponding to the elements within the array of frequencies.
     """
-    c, h, k, T_cmb, *ingore = constants
+    c, h, k, T_cmb, *ignore = constants
 
-    T_cmb = 2.7255
+#    T_cmb = 2.7255
 
     watt_m2_hz_sr_to_MJy_sr_conversion_factor = 10 ** 20 #The derivative of the Planck function converts from Kcmb to Watt / (m^2 Hz sr), this factor converts from Watt / (m^2 Hz sr) to MJy / sr
 
@@ -297,5 +297,13 @@ def define_bounds():
 
 
 def extract_number(filename):
+    """
+    Frequency map files  downloaded from the Planck Legacy Archive tend to have their associated frequency mentioned in the name, i.e, HFI_CompMap_Foregrounds-commander-143_R3.00.fits and HFI_SkyMap_143_2048_R3.01_full.fits are the 143GHz maps. This function finds the frequency from within the name of the file and sorts the fits files from smallest to highest frequency. This is implemented in case the frequency of the file is not in the metadata and thus the frequencies array must be hard-coded. This assures that the maps are in the same order as the hard-coded array.
+
+    This function reads the name of the fits file, then stores the first sequence of numbers. It assumes that this number (143 in the examples above) is the frequency associated with the map. If a sequence is found, it is returned as an integer through the match.group(0) command, if no sequence is found within the title of the file name, a 0 is returned.
+    """
+
     match = re.search(r'(\d+)', filename)
     return int(match.group(0)) if match else 0
+
+
