@@ -1,4 +1,6 @@
 #In this file, paste the directory paths to where you have saved the 'configuration_files directory and the 'fits_files' directory. Add both directory paths within quotes.
 
+#After your personal directory paths are pasted below, save this file as 'directories.txt' in the same folder it was cloned into, py_codes
+
 Configuration files directory: '/paste/the/directory/path/ending/with/configuration_files'
 Fits files directory: '/paste/the/directory/path/ending/with/your/fits file maps'
