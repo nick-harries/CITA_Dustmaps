@@ -187,3 +187,12 @@ def plot_minimized_Chi2(optimized_parameters_array):
     plt.ylabel('Chi^2 value')
    #plt.savefig('Minimized_Chi2.png')
     plt.show()
+
+def plot_raw_data(stokes_arrays_correct_units, nest_type):
+    Stokes_parameters = ['I', 'Q', 'U', 'II', 'QQ', 'UU']
+    for file in range(np.shape(stokes_arrays_correct_units)[0]):
+        for parameter in range(np.shape(stokes_arrays_correct_units)[1]):
+            if not np.isnan(stokes_arrays_correct_units[file, parameter, 0]):
+                #plt.figure()
+                hp.mollview(stokes_arrays_correct_units[file, parameter, :], title=Stokes_parameters[parameter], unit='MJy/sr', nest = nest_type, norm='hist')
+    plt.show()

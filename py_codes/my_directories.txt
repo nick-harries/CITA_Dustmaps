@@ -1,0 +1,4 @@
+#In this file, paste the directory paths to where you have saved the 'configuration_files directory and the 'fits_files' directory. Add both directory paths within quotes.
+
+Configuration files directory: '/home/nicholas-harries/Desktop/Planck_copies/configuration_files'
+Fits files directory: '/home/nicholas-harries/Desktop/Planck_copies/fits_files/frequency_maps'

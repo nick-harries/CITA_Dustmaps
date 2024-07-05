@@ -3,9 +3,10 @@ import os
 import numpy as np
 from scipy.optimize import minimize
 import re
+import time
 
 # Read the file that you have set up with your directory paths
-txt_file_path = 'directories.txt'
+txt_file_path = 'my_directories.txt'
 with open(txt_file_path, 'r') as file:
     txt_content = file.read() #Search within the directories.txt file
 config_dir_match = re.search(r"Configuration files directory:\s*'(.+?)'", txt_content) #Find configuration file path
@@ -50,7 +51,7 @@ bounds = define_bounds()
 #Create array of frequency values associated to the fits files
 frequencies = np.zeros(len(files))
 for f in range(len(files)):
-    frequencies[f] = np.float64(extract_info(files[f])[6]) #Sort through the fits files and append frequency values extracted from metadata
+    frequencies[f] = extract_info(files[f])[6] #Sort through the fits files and append frequency values extracted from metadata
 if any(np.isnan(frequencies)): #CMB-removed maps have no frequency information in their metadata, this condition assumes frequencies associated with files in that case, should be modified to fit your condition
     print('Frequencies not in metadata, using hard-coded values')
     frequencies = np.array([1.43e11, 2.17e11, 3.43e11, 5.45e11, 8.57e11])
@@ -92,25 +93,27 @@ def execute_Chi2_optimization(constants, stokes_arrays_correct_units, bounds, pa
     arrays_to_optimize = []
     for file_number in range(np.shape(stokes_arrays_correct_units)[0]):
         for parameter in range(3):
-            if not np.isnan(stokes_arrays_correct_units[file_number, parameter, 0]):
+            if not np.all(stokes_arrays_correct_units[file_number, parameter, :] == 0):
                 arrays_to_optimize.append([file_number, parameter])
+    arrays_to_optimize = np.array(arrays_to_optimize)
+    #for a in range(arrays_to_optimize.shape[0])
     print(arrays_to_optimize)   
    
 
-    length_of_sample = int(len(stokes_arrays_correct_units[0, 0, :])) #Choose how many indices to optimize in this sample
-    starting_index = int(0) #Which index of the array to start at
-    ending_index = int(starting_index + length_of_sample) #Which index to end at (automatically calculated from length_of_sample and starting_index variables
+    length_of_sample = 100# int(len(stokes_arrays_correct_units[0, 0, :])) #Choose how many indices to optimize in this sample
+    starting_index = 0#int(3e4) #Which index of the array to start at
+    ending_index = starting_index + length_of_sample #Which index to end at (automatically calculated from length_of_sample and starting_index variables
 
     stokes_arrays_reconstructed = np.zeros((len(frequencies), 3, length_of_sample)) #initialize empty array to store stokes array models
     optimized_parameters_array = np.zeros((length_of_sample, 7)) #Initialize empty array to store optimized parameters for each pixel of each optimized array
 
-    optimize_methods = ['BFGS', 'TNC', 'Powell'] #scipy.optimize.minimize methods, all are used to find best possible parameter combination
-    tally_count = np.array([0, 0, 0, 0]) #Used to see which optimization methods are most efficient
+    optimize_methods = np.array(['BFGS', 'Powell']) #scipy.optimize.minimize methods, all are used to find best possible parameter combination
+    tally_count =np.zeros(optimize_methods.shape[0]+1)#np.array([0, 0, 0, 0]) #Used to see which optimization methods are most efficient
 
-    print('begin optimization, starting index: %d, ending index: %d ...'%(starting_index, ending_index))
+    print(f'begin optimization, starting index: {starting_index}, ending index: {ending_index} ...')
     j = 0
+    start_time = time.time()
     for i in range(starting_index, ending_index): #Range of i is the range of indices of the real data that we will optimize parameters for
-
         optimized_params = minimize(Chi2, parameters, args=(frequencies, constants, stokes_arrays_correct_units, arrays_to_optimize, i), method='Nelder-Mead')#, bounds=bounds)
         minimized_Chi_2 = optimized_params.fun
 
@@ -126,22 +129,55 @@ def execute_Chi2_optimization(constants, stokes_arrays_correct_units, bounds, pa
                 continue
 
 
+        # Recreate values using the optimized parameters
+        recreated_values = stokes_reconstruction(optimized_params.x, constants, frequencies)  # Models emission based on the optimized parameters, returns I, Q, U values in each input frequency
 
-        recreated_values = stokes_reconstruction(optimized_params.x, constants, frequencies) #Models emission based off of the optimized parameters, returns I, Q, U values in each input frequency
-        # Store the emission reconstruction values in the empty array
-        for freq in range(np.shape(recreated_values)[0]): #For each input frequency
-            for param in range(np.shape(recreated_values)[1]): #For each parameter (I, Q, U)
-                stokes_arrays_reconstructed[freq, param, j] = recreated_values[freq, param]
+        # Store the emission reconstruction values in the empty array using numpy broadcasting
+        stokes_arrays_reconstructed[:, :, j] = recreated_values
+
+        # Store each of the 6 optimized parameters
+        optimized_parameters_array[j, :6] = optimized_params.x[:6]
+
+        # Store the minimal Chi2 value for the pixel in the last column of the array
+        optimized_parameters_array[j, 6] = minimized_Chi_2
+
+
+
+
+
+
+
+
+
+#The optimized values for the pixel are calculated. Now they are simply being stored in their respective arrays
+#        recreated_values = stokes_reconstruction(optimized_params.x, constants, frequencies) #Models emission based off of the optimized parameters, returns I, Q, U values in each input frequency
+#        # Store the emission reconstruction values in the empty array
+#        for freq in range(recreated_values.shape[0]): #For each input frequency
+#            for param in range(recreated_values.shape[1]): #For each parameter (I, Q, U)
+#                stokes_arrays_reconstructed[freq, param, j] = recreated_values[freq, param]
         
-        for param in range(6): # Store each of the 6 optimized parameters, will be in the same order as the initial parameters array (T, Beta, Tau, Psi, Alpha, p_frac)
-            optimized_parameters_array[j, param] = optimized_params.x[param]
-        optimized_parameters_array[j, 6] = minimized_Chi_2 #Store the minimal Chi2 value for the pixel in the last column of the array
+#        for param in range(6): # Store each of the 6 optimized parameters, will be in the same order as the initial parameters array (T, Beta, Tau, Psi, Alpha, p_frac)
+#            optimized_parameters_array[j, param] = optimized_params.x[param]
+#        optimized_parameters_array[j, 6] = minimized_Chi_2 #Store the minimal Chi2 value for the pixel in the last column of the array
 
         print(j, '%.3e'%minimized_Chi_2)
         j+=1 #Update index number for storing in arrays
 
-    tally_count[0] = length_of_sample - np.sum(tally_count) #Number of times the initial method is used is the length of the array minus the number of times the other methods were used.
-    print('tally count: ', tally_count)
+
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    time_for_whole_array = (stokes_arrays_correct_units.shape[2] / length_of_sample) * elapsed_time
+
+    # Convert time_for_whole_array to hours, minutes, and seconds
+    hours = int(time_for_whole_array // 3600)
+    minutes = int((time_for_whole_array % 3600) // 60)
+    seconds = int(time_for_whole_array % 60)
+
+    tally_count[0] = length_of_sample - np.sum(tally_count)
+    print('Tally count: ', tally_count)
+    print(f'Time taken for sample: {elapsed_time:.2f} seconds')
+    print(f'Time estimated for whole array: {hours}h {minutes}m {seconds}s')
+    print(f'Mean Chi2: {np.mean(optimized_parameters_array[:, -1])}')
 
     return stokes_arrays_reconstructed, optimized_parameters_array, arrays_to_optimize, starting_index, ending_index
 
@@ -153,6 +189,6 @@ print(np.shape(optimized_parameters_array))
 
 print('Plotting ...')
 plot_recreated_values_and_fit(stokes_arrays_reconstructed, stokes_arrays_correct_units, arrays_to_optimize, starting_index, ending_index, frequencies)
-#plot_optimized_parameters(optimized_parameters_array)
+plot_optimized_parameters(optimized_parameters_array)
 plot_minimized_Chi2(optimized_parameters_array)
 #plot_optimized_parameters_histograms(optimized_parameters_array)
