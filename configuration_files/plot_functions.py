@@ -9,11 +9,13 @@ def plot_recreated_values_and_fit(stokes_arrays_reconstructed, stokes_arrays_cor
     This function calls the array created by the execute_Chi2_optimization function, as well as the Planck data. It then plots the modelled emission next to the true emission for each frequency and stokes parameter.
     For each column where no real data exists, the model is plotted on its own.
     """
+
+    arrays_to_optimize = set(map(tuple, arrays_to_optimize))
     Stokes_parameters = ['I', 'Q', 'U']
-    for freq in range(np.shape(stokes_arrays_reconstructed)[0]):
-        for parameter in range(np.shape(stokes_arrays_reconstructed)[1]):
+    for freq in range(stokes_arrays_reconstructed.shape[0]):
+        for parameter in range(stokes_arrays_reconstructed.shape[1]):
             plt.figure()
-            if [freq, parameter] in arrays_to_optimize: #If data exists within the column, calculate residual and plot everything        
+            if (freq, parameter) in arrays_to_optimize: #If data exists within the column, calculate residual and plot everything        
                 residual = stokes_arrays_correct_units[freq, parameter, starting_index:ending_index] - stokes_arrays_reconstructed[freq, parameter, :]
                 plt.subplot(2,2 ,1)
                 plt.title('Stokes %s %.2e (boundless)'%(Stokes_parameters[parameter], frequencies[freq]))
@@ -59,8 +61,7 @@ def plot_optimized_parameters(optimized_parameters_array):
     """
     This function calls the array created by the  execute_Chi2_optimization function and the plots the optimized parameters as a function of index. These plots are titled with which parameter they show as well as the mean value across the sample.
     """
-    #Temperature, Beta, Tau, Psi, Alpha, p_frac= optimized_parameters_array[:, :5]
-    Temperature, Beta, Tau, Psi, Alpha, p_frac = optimized_parameters_array[:, :6].T
+    Temperature, Beta, Tau, Psi, Alpha, p_frac = optimized_parameters_array[:, :-1].T
 
 
     #plt.subplot(231)
@@ -73,7 +74,7 @@ def plot_optimized_parameters(optimized_parameters_array):
     #plt.subplot(232)
     plt.figure()
     plt.plot(Beta)
-    plt.title('beta, mean: %.2f, mode: %.2f'%(np.mean(Beta), mode(Temperature)))
+    plt.title('beta, mean: %.2f, mode: %.2f'%(np.mean(Beta), mode(Beta)))
     plt.xlabel('Index Number')
     plt.ylabel('Unitless Magnitude')
    #plt.savefig('Beta_array.png')
@@ -118,8 +119,8 @@ def plot_optimized_parameters_histograms(optimized_parameters_array):
     """
     This function calls the array created by the  execute_Chi2_optimization function and the plots the optimized parameters as a function of index. These plots are titled with which parameter they show as well as the mean value across the sample.
     """
-    #Temperature, Beta, Tau, Psi, Alpha, p_frac= data[:, -7], data[:, -6], data[:, -5], data[:, -4], data[:, -3], data[:, -2]
-    Temperature, Beta, Tau, Psi, Alpha, p_frac = optimized_parameters_array[:, :6].T
+
+    Temperature, Beta, Tau, Psi, Alpha, p_frac = optimized_parameters_array[:, :-1].T
 
 
     #plt.subplot(231)
